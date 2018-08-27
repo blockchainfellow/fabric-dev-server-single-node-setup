@@ -1,5 +1,17 @@
 # fabric-dev-server-single-node-setup
 Fabric single node setup with composer rest server, angular-app, and sample bna
+### Sample application
+
+```
+index.html
+package.json
+```
+
+### Diagram sources:
+
+* http://usblogs.pwc.com/emerging-technology/a-primer-on-blockchain-infographic/
+* http://www.think-foundry.com/wp-content/uploads/2017/11/fabricDeployment.png
+* https://fabrictestdocs.readthedocs.io/en/latest/glossary.html
 
 ### Launch AWS Ubuntu 18.04 
 
