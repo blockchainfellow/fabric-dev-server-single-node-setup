@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Accounts List</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+<script>
+
+var service = 'http://18.214.99.44:3000/api';
+
+function makePayment(inputData) {
+  console.log(inputData);
+  var inputDataAr = inputData.split("#");
+  var amount = prompt("Please specify amount to pay for:\nAccount# " + inputDataAr[0] + "\nCustomer Name: " + inputDataAr[1] +"\nMinimum Pay: "+ inputDataAr[2], inputDataAr[2]);
+  if (amount != null) {
+      makePaymentAjax(inputDataAr[0], inputDataAr[1], amount);
+  }
+  
+};
+
+function makePaymentAjax(account, customer, paymentAmt) {
+
+   jQuery.support.cors = true;
+
+    $.ajax(
+    {
+        type: "POST",
+        url: service + '/makePayment',
+        data: "{\"account\":\""+account+"\", \"customer\":\""+customer+"\", \"paymentAmt\":\""+paymentAmt+"\"}",
+        contentType: "application/json",
+        dataType: "json",
+        cache: false,
+        success: function (data) {  
+          console.log(data);
+          $("#accounts tbody").empty();
+          loadAccount();
+        },
+        
+        error: function (msg) {
+            alert(msg);
+        }
+    });
+
+    console.log('Payments success.');
+
+};
+
+function loadAccount() {
+
+   jQuery.support.cors = true;
+
+    $.ajax(
+    {
+        type: "GET",
+        url: service + '/Account',
+        data: "{}",
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        cache: false,
+        success: function (data) {
+            
+        var trHTML = '';
+                
+        $.each(data, function (i, item) {
+            
+            var custName = item.customer;
+            var custName1 = custName.split("#");
+            trHTML += '<tr><td>' + (i+1) + '.</td><td>' + item.accountNumber + '</td><td>' + custName1[1] + '</td><td>' + item.balance + '</td><td>' + item.status + '</td><td>' + item.dueDate + '</td><td>' + item.minPay + '</td><td><button onclick="makePayment( \''+item.accountNumber+'#'+custName1[1]+'#' +item.minPay+'\')" class="btn btn-primary">Pay</button></td></tr>';
+
+        });
+        
+        $('#accounts').append(trHTML);
+        
+        },
+        
+        error: function (msg) {
+            alert(msg);
+        }
+
+
+    });
+
+    console.log('Accounts loaded.');
+
+};
+
+$(document).ready(function(){
+
+  loadAccount();
+
+})
+
+</script>
+
+
+</head>
+<body>
+
+<div class="container">
+  <br/><br/><br/>
+  <h2>Blockchain | Hyperledger Fabric</h2><h3>Custumer Accounts List</h3>
+  <p>List of account numbers in collection</p>            
+  <table id="accounts" class="table table-hover">
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>Acct#</th>
+        <th>Customer</th>
+        <th>Balance</th>
+        <th>Status</th>
+        <th>Date Due</th>
+        <th>Minimum Pay</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
