@@ -25,6 +25,9 @@ c. Enable the SG group on AWS to allow all.
 
 ```
 sudo apt update -y && sudo apt upgrade -y
+
+Update only:
+sudo apt update -y
 sudo apt install nano git make gcc g++ libltdl-dev curl python pkg-config -y
 ```
 
