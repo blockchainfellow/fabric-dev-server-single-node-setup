@@ -486,6 +486,9 @@ cat package.json
   "dependencies": {}
 }
 
+npm install
+nohup npm start &
+http://YOUR_IP:8100/
 
 ```
 
