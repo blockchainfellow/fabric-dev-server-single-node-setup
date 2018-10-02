@@ -300,9 +300,27 @@ nohup composer-rest-server -c admin@collections-network  -n never -w true &
 
 ### Start angular-app - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
 ```
+into the folder where you have the .bna file
+cd where-you-have-the-bna-copied
+
 yo hyperledger-composer:angular
 
+Welcome to the Hyperledger Composer Angular project generator
+? Do you want to connect to a running Business Network? No
+? Project name: card-network-app
+? Description: Card Network App
+? Author name: j@j.com
+? Author email: j@j.com
+? License: Apache-2.0
+? Business network archive file (Path from the current working directory): card-network@0.0.1.bna
+? REST server address: http://YOUR_IP
+? REST server port: 3000
+? Are namespaces used in the generated REST API:  Namespaces are not used
+
+Allow access to YOUR_IP
+
 vi node_modules/webpack-dev-server/lib/Server.js (line 425):
+
 change to
 return true;
 
