@@ -40,7 +40,7 @@ sudo apt update -y && sudo apt upgrade -y
 
 Update only:
 sudo apt update -y
-sudo apt install nano git make gcc g++ libltdl-dev curl python pkg-config -y
+sudo apt install nano git make gcc g++ libltdl-dev curl python pkg-config vim -y
 ```
 
 ### Install Docker/ Docker Compose
@@ -53,7 +53,9 @@ sudo chmod +x /usr/local/bin/docker-compose
 ```
 
 ### Install nodejs / Composer
+
 ```
+cd ~
 wget https://nodejs.org/dist/v8.11.2/node-v8.11.2-linux-x64.tar.xz
 tar -xf node-v8.11.2-linux-x64.tar.xz 
 mv node-v8.11.2-linux-x64/ node/
@@ -113,7 +115,338 @@ http://IP1:8181/
 
 ```
 
-### Create business network - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
+### Create Sample business network archive 1 - collections-network
+
+```
+
+mkdir ~/sample-network-bna
+cd ~/sample-network-bna
+
+yo hyperledger-composer:businessnetwork
+
+? Business network name: collections-network
+? Description: Collections Network
+? Author name:  John Doe
+? Author email: johndoe@johndoe.com
+? License: Apache-2.0
+? Namespace: org.example.mynetwork
+
+Do you want to generate an empty template network? 
+> No: generate a populated sample network
+
+   create package.json
+   create README.md
+   create models/org.example.mynetwork.cto
+   create permissions.acl
+   create .eslintrc.yml
+   create features/sample.feature
+   create features/support/index.js
+   create test/logic.js
+   create lib/logic.js
+
+cd collections-network
+
+Remove and replace with below data
+
+$ nano models/org.example.mynetwork.cto
+
+/**
+ * My collections network
+ */
+namespace org.example.mynetwork
+asset Account identified by accountNumber {
+    o String accountNumber
+    o Double balance
+    o String status
+    o String dueDate
+    o Double minPay
+    --> Customer customer
+}
+participant Customer identified by customerId {
+    o String customerId
+    o String dateOfBirth
+}
+transaction makePayment {
+    --> Account account
+    --> Customer customer
+    o Double paymentAmt
+}
+
+Remove and replace with below data
+
+$ nano lib/logic.js
+
+/**
+ * Make payment
+ * @param {org.example.mynetwork.makePayment} tx - the customer to be processed
+ * @transaction
+ */
+async function makePayment(tx) {
+    let assetRegistry = await getAssetRegistry('org.example.mynetwork.Account');
+    tx.account.customer.accountNumber = tx.customer.customerId;
+    tx.account.balance = tx.account.balance - tx.paymentAmt;
+    tx.account.status = 'PAID';
+    tx.account.minPay = 0;
+    await assetRegistry.update(tx.account);
+}
+
+$ nano permissions.acl
+
+/**
+ * Access control rules for collections-network
+ */
+rule Default {
+    description: "Allow all participants access to all resources"
+    participant: "ANY"
+    operation: ALL
+    resource: "org.example.mynetwork.*"
+    action: ALLOW
+}
+
+rule SystemACL {
+  description:  "System ACL to permit all access"
+  participant: "ANY"
+  operation: ALL
+  resource: "org.hyperledger.composer.system.**"
+  action: ALLOW
+}
+
+Build BNA
+
+composer archive create -t dir -n .
+composer network install --card PeerAdmin@hlfv1 --archiveFile collections-network@0.0.1.bna
+composer network start --networkName collections-network --networkVersion 0.0.1 --networkAdmin admin --networkAdminEnrollSecret adminpw --card PeerAdmin@hlfv1 --file networkadmin.card
+composer card import --file networkadmin.card
+composer network ping --card admin@collections-network 
+
+Refresh the Composer UI in the browser
+http://IP:8181
+
+Enable the REST Server
+nohup composer-rest-server -c admin@collections-network  -n never -w true & 
+
+http://IP:3000/explorer/
+
+Sample API request:
+
+{
+  "$class": "org.example.mynetwork.makePayment",
+  "account": "ACT1111",
+  "customer": "JohnDoe",
+  "paymentAmt": 1500,
+  "transactionId": "",
+  "timestamp": "2018-08-20T22:42:37.263Z"
+}
+
+```
+
+
+### Start angular-app - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
+```
+
+mkdir ~/sample-network-bna/collections-network-app
+cd ~/sample-network-bna/collections-network-app
+cp ~/sample-network-bna/collections-network/collections-network\@0.0.1.bna .
+
+yo hyperledger-composer:angular
+
+
+Welcome to the Hyperledger Composer Angular project generator
+? Do you want to connect to a running Business Network? No
+? Project name: collections-network-app
+? Description: Collections Network App
+? Author name: John Doe
+? Author email: johndoe@johndoe.com
+? License: Apache-2.0
+? Business network archive file (Path from the current working directory): collections-network@0.0.1.bna
+? REST server address: http://YOUR_IP
+? REST server port: 3000
+? Are namespaces used in the generated REST API:  Namespaces are not used
+
+Allow access to YOUR_IP - Change from false to return true;
+
+nano ~/sample-network-bna/collections-network-app/collections-network-app/node_modules/webpack-dev-server/lib/Server.js (line 425 nano - Ctrl _):
+
+Start it
+cd ~/sample-network-bna/collections-network-app/collections-network-app
+nohup npm start &
+cat nohup.out
+On Browser -> http://IP:4200/
+
+```
+
+## Sample REST-Client Application (Javascript)
+
+```
+
+mkdir ~/sample-network-bna/collections-network-ui
+cd ~/sample-network-bna/collections-network-ui
+
+$ nano index.html 
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Collections Network UI - List Of Accounts</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+<script>
+
+var service = 'http://34.230.1.116:3000/api';
+
+function makePayment(inputData) {
+  console.log(inputData);
+  var inputDataAr = inputData.split("#");
+  var amount = prompt("Please specify amount to pay for:\nAccount# " + inputDataAr[0] + "\nCustomer Name: " + inputDataAr[1] +"\nMinimum Pay: "+ inputDataAr[2], inputDataAr[2]);
+  if (amount != null) {
+      makePaymentAjax(inputDataAr[0], inputDataAr[1], amount);
+  }
+  
+};
+
+function makePaymentAjax(account, customer, paymentAmt) {
+
+   jQuery.support.cors = true;
+
+    $.ajax(
+    {
+        type: "POST",
+        url: service + '/makePayment',
+        data: "{\"account\":\""+account+"\", \"customer\":\""+customer+"\", \"paymentAmt\":\""+paymentAmt+"\"}",
+        contentType: "application/json",
+        dataType: "json",
+        cache: false,
+        success: function (data) {  
+          console.log(data);
+          $("#accounts tbody").empty();
+          loadAccount();
+        },
+        
+        error: function (msg) {
+            alert(msg);
+        }
+    });
+
+    console.log('Payments success.');
+
+};
+
+function loadAccount() {
+
+   jQuery.support.cors = true;
+
+    $.ajax(
+    {
+        type: "GET",
+        url: service + '/Account',
+        data: "{}",
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        cache: false,
+        success: function (data) {
+            
+        var trHTML = '';
+                
+        $.each(data, function (i, item) {
+            
+            var custName = item.customer;
+            var custName1 = custName.split("#");
+            trHTML += '<tr><td>' + (i+1) + '.</td><td>' + item.accountNumber + '</td><td>' + custName1[1] + '</td><td>' + item.balance + '</td><td>' + item.status + '</td><td>' + item.dueDate + '</td><td>' + item.minPay + '</td><td><button onclick="makePayment( \''+item.accountNumber+'#'+custName1[1]+'#' +item.minPay+'\')" class="btn btn-primary">Pay</button></td></tr>';
+
+        });
+        
+        $('#accounts').append(trHTML);
+        
+        },
+        
+        error: function (msg) {
+            alert(msg);
+        }
+
+
+    });
+
+    console.log('Accounts loaded.');
+
+};
+
+$(document).ready(function(){
+
+  loadAccount();
+
+})
+
+</script>
+
+
+</head>
+<body>
+
+<div class="container">
+  <br/><br/><br/>
+  <h2>Collections Network UI</h2><h3>List Of Accounts in Hyperledger Blockchain</h3>
+  <p>List of account numbers in Card Network</p>            
+  <table id="accounts" class="table table-hover">
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>Acct#</th>
+        <th>Customer</th>
+        <th>Balance</th>
+        <th>Status</th>
+        <th>Date Due</th>
+        <th>Minimum Pay</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
+
+$ nano package.json 
+{
+  "name": "collectionsnetworkui",
+  "version": "1.0.0",
+  "description": "Collections Network UI",
+  "local-web-server": {
+    "port": 8100,
+    "forbid": "*.json"
+  },
+  "scripts": {
+    "start": "ws",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "John Doe",
+  "license": "MIT",
+  "devDependencies": {
+    "local-web-server": "^1.1.0"
+  },
+  "repository": {
+   "type": "git",
+   "url": "https://github.com/blockchainfellow/fabric-dev-server-single-node-setup/edit/master/README.md"
+  },
+  "dependencies": {}
+}
+
+Starting it.
+
+npm install
+nohup npm start &
+http://YOUR_IP:8100/
+
+```
+
+## Old Examples
+
+### Create business network 2 - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
 
 ```
 yo hyperledger-composer:businessnetwork
@@ -209,11 +542,7 @@ composer card import --file networkadmin.card
 Check that the business network has been deployed successfully,
 composer network ping --card admin@tutorial-network
 
-```
-
-### Generating REST server - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
-
-```
+Generating REST server - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
 
 composer-rest-server
 
@@ -236,259 +565,6 @@ Sample request:
   "newOwner": "JohnDoe",
   "timestamp": "2018-08-20T07:04:25.893Z"
 }
-
-
-```
-
-
-### collections-network
-
-```
-/**
- * My collections network
- */
-namespace org.example.mynetwork
-asset Account identified by accountNumber {
-    o String accountNumber
-    o Double balance
-    o String status
-    o String dueDate
-    o Double minPay
-    --> Customer customer
-}
-participant Customer identified by customerId {
-    o String customerId
-    o String dateOfBirth
-}
-transaction makePayment {
-    --> Account account
-    --> Customer customer
-    o Double paymentAmt
-}
-
-/**
- * Make payment
- * @param {org.example.mynetwork.makePayment} tx - the customer to be processed
- * @transaction
- */
-async function makePayment(tx) {
-    let assetRegistry = await getAssetRegistry('org.example.mynetwork.Account');
-    tx.account.customer.accountNumber = tx.customer.customerId;
-    tx.account.balance = tx.account.balance - tx.paymentAmt;
-    tx.account.status = 'PAID';
-    await assetRegistry.update(tx.account);
-}
-
-composer archive create -t dir -n .
-composer network install --card PeerAdmin@hlfv1 --archiveFile collections-network@0.0.1.bna
-composer network start --networkName collections-network --networkVersion 0.0.1 --networkAdmin admin --networkAdminEnrollSecret adminpw --card PeerAdmin@hlfv1 --file networkadmin.card
-composer card import --file networkadmin.card
-composer network ping --card admin@collections-network 
-
-nohup composer-rest-server -c admin@collections-network  -n never -w true & 
-
-{
-  "$class": "org.example.mynetwork.makePayment",
-  "account": "ACT1111",
-  "customer": "JohnDoe",
-  "paymentAmt": 1500,
-  "transactionId": "",
-  "timestamp": "2018-08-20T22:42:37.263Z"
-}
-
-```
-
-### Start angular-app - https://hyperledger.github.io/composer/latest/tutorials/developer-tutorial.html
-```
-into the folder where you have the .bna file
-cd where-you-have-the-bna-copied
-
-yo hyperledger-composer:angular
-
-Welcome to the Hyperledger Composer Angular project generator
-? Do you want to connect to a running Business Network? No
-? Project name: card-network-app
-? Description: Card Network App
-? Author name: j@j.com
-? Author email: j@j.com
-? License: Apache-2.0
-? Business network archive file (Path from the current working directory): card-network@0.0.1.bna
-? REST server address: http://YOUR_IP
-? REST server port: 3000
-? Are namespaces used in the generated REST API:  Namespaces are not used
-
-Allow access to YOUR_IP
-
-vi node_modules/webpack-dev-server/lib/Server.js (line 425):
-
-change to
-return true;
-
-nohup npm start &
-
-```
-
-
-## Sample REST-Client
-
-```
-cat index.html 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Accounts List</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-
-<script>
-
-var service = 'http://YOUR_IP:3000/api';
-
-function makePayment(inputData) {
-  console.log(inputData);
-  var inputDataAr = inputData.split("#");
-  var amount = prompt("Please specify amount to pay for:\nAccount# " + inputDataAr[0] + "\nCustomer Name: " + inputDataAr[1] +"\nMinimum Pay: "+ inputDataAr[2], inputDataAr[2]);
-  if (amount != null) {
-      makePaymentAjax(inputDataAr[0], inputDataAr[1], amount);
-  }
-  
-};
-
-function makePaymentAjax(account, customer, paymentAmt) {
-
-   jQuery.support.cors = true;
-
-    $.ajax(
-    {
-        type: "POST",
-        url: service + '/makePayment',
-        data: "{\"account\":\""+account+"\", \"customer\":\""+customer+"\", \"paymentAmt\":\""+paymentAmt+"\"}",
-        contentType: "application/json",
-        dataType: "json",
-        cache: false,
-        success: function (data) {  
-          console.log(data);
-          $("#accounts tbody").empty();
-          loadAccount();
-        },
-        
-        error: function (msg) {
-            alert(msg);
-        }
-    });
-
-    console.log('Payments success.');
-
-};
-
-function loadAccount() {
-
-   jQuery.support.cors = true;
-
-    $.ajax(
-    {
-        type: "GET",
-        url: service + '/Account',
-        data: "{}",
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        cache: false,
-        success: function (data) {
-            
-        var trHTML = '';
-                
-        $.each(data, function (i, item) {
-            
-            var custName = item.customer;
-            var custName1 = custName.split("#");
-            trHTML += '<tr><td>' + (i+1) + '.</td><td>' + item.accountNumber + '</td><td>' + custName1[1] + '</td><td>' + item.balance + '</td><td>' + item.status + '</td><td>' + item.dueDate + '</td><td>' + item.minPay + '</td><td><button onclick="makePayment( \''+item.accountNumber+'#'+custName1[1]+'#' +item.minPay+'\')" class="btn btn-primary">Pay</button></td></tr>';
-
-        });
-        
-        $('#accounts').append(trHTML);
-        
-        },
-        
-        error: function (msg) {
-            alert(msg);
-        }
-
-
-    });
-
-    console.log('Accounts loaded.');
-
-};
-
-$(document).ready(function(){
-
-  loadAccount();
-
-})
-
-</script>
-
-
-</head>
-<body>
-
-<div class="container">
-  <br/><br/><br/>
-  <h2>Blockchain | Hyperledger Fabric</h2><h3>Custumer Accounts List</h3>
-  <p>List of account numbers in Card Network</p>            
-  <table id="accounts" class="table table-hover">
-    <thead>
-      <tr>
-        <th>No.</th>
-        <th>Acct#</th>
-        <th>Customer</th>
-        <th>Balance</th>
-        <th>Status</th>
-        <th>Date Due</th>
-        <th>Minimum Pay</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-    </tbody>
-  </table>
-</div>
-
-</body>
-</html>
-
-
-cat package.json 
-{
-  "name": "cardnetworkui",
-  "version": "1.0.0",
-  "description": "Card Network UI",
-  "local-web-server": {
-    "port": 8100,
-    "forbid": "*.json"
-  },
-  "scripts": {
-    "start": "ws",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "John Doe",
-  "license": "MIT",
-  "devDependencies": {
-    "local-web-server": "^1.1.0"
-  },
-  "repository": {
-   "type": "git",
-   "url": "http://localhost"
-  },
-  "dependencies": {}
-}
-
-npm install
-nohup npm start &
-http://YOUR_IP:8100/
 
 ```
 
